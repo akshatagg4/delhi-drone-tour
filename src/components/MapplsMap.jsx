@@ -9,31 +9,43 @@ const MapplsMap = forwardRef((props, ref) => {
   const [isMapLoaded, setIsMapLoaded] = useState(false);
 
   // 1. Script Loader with RealView Plugin
-  useEffect(() => {
-    const loadScript = () => {
-      if (window.Mappls && window.Mappls.Map) {
-        initMap();
-        return;
+useEffect(() => {
+    // 1. Define the initialization function
+    const initMap = () => {
+      // CHECK: Is the Mappls script loaded yet?
+      if (window.mappls && window.mappls.Map) {
+        
+        // If yes, load the map!
+        const map = new window.mappls.Map('map', {
+          center: [28.6129, 77.2295],
+          zoom: 18,
+        });
+
+        map.addListener('load', () => {
+          // Initialize RealView (Street View) only after map loads
+          if (window.mappls.RealView) {
+            realViewRef.current = new window.mappls.RealView({
+              map: map,
+              position: map.getCenter(),
+            });
+          }
+        });
+      
+      } else {
+        // If script is not ready, wait 100ms and try again
+        console.log("Waiting for Mappls script...");
+        setTimeout(initMap, 100); 
       }
-      
-      const key = import.meta.env.VITE_MAPPLS_KEY;
-      const script = document.createElement('script');
-      // Crucial: plugins=realview is required here
-      script.src = `https://apis.mappls.com/advancedmaps/api/${key}/map_sdk?layer=vector&v=3.0&callback=initMapWithRealView&plugins=realview`;
-      script.async = true;
-      script.defer = true;
-      document.body.appendChild(script);
-      
-      window.initMapWithRealView = () => {
-        initMap();
-      };
     };
 
-    loadScript();
-    
+    // 2. Start the check
+    initMap();
+
+    // Cleanup function
     return () => {
-      // Cleanup orbit on unmount
-      if (orbitRef.current) cancelAnimationFrame(orbitRef.current);
+      if (realViewRef.current) {
+        realViewRef.current.remove();
+      }
     };
   }, []);
 
@@ -170,5 +182,5 @@ realViewRef.current = new window.mappls.RealView({ // <-- Fix
     </div>
   );
 });
-
-export default MapplsMap;
+ 
+export default MapplsMap; 
