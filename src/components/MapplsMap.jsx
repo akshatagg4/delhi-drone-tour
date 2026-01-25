@@ -42,7 +42,7 @@ const MapplsMap = forwardRef((props, ref) => {
     // Safety check
     if (mapRef.current) return;
 
-    const map = new window.Mappls.Map('map', {
+const map = new window.mappls.Map('map', {  // <-- Fix: Small 'm'
       center: [28.6129, 77.2295], // India Gate
       zoom: 18,
       tilt: 65,      // Max tilt for 3D drama
@@ -117,7 +117,7 @@ const MapplsMap = forwardRef((props, ref) => {
                   return;
               }
               
-              realViewRef.current = new window.Mappls.RealView({
+realViewRef.current = new window.mappls.RealView({ // <-- Fix
                   mapId: 'realview-container',
                   position: { lat, lng },
                   unit: 'metric'
