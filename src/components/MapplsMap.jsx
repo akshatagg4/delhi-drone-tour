@@ -1,35 +1,34 @@
-/* src/components/MapplsMap.jsx */
-import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 
-const MapplsMap = forwardRef((props, ref) => {
-  const mapRef = useRef(null);
+const MapplsMap = () => {
   const realViewRef = useRef(null);
-  const orbitRef = useRef(null);
-  const [isRealViewActive, setIsRealViewActive] = useState(false);
-  const [isMapLoaded, setIsMapLoaded] = useState(false);
 
-  // 1. Script Loader with RealView Plugin
-useEffect(() => {
-    // 1. Create the script tag dynamically
+  useEffect(() => {
+    // Debug: Check if Key is present
+    console.log("Map Component Mounted. Key:", import.meta.env.VITE_MAPPLS_KEY);
+
+    // 1. Load the Script Dynamically
     const script = document.createElement("script");
-    // NOTE: We removed the '&callback=initMapWithRealView' part to prevent the crash!
     script.src = `https://apis.mappls.com/advancedmaps/api/${import.meta.env.VITE_MAPPLS_KEY}/map_sdk?layer=vector&v=3.0&plugins=realview`;
     script.async = true;
     script.defer = true;
+    script.id = "mappls-script"; // Tag it so we don't duplicate
     document.body.appendChild(script);
 
-    // 2. Define the initialization function (The Safety Loop)
+    // 2. The Safety Loop (Waits for script to load)
     const initMap = () => {
-      // CHECK: Is the Mappls script loaded yet?
       if (window.mappls && window.mappls.Map) {
+        console.log("Mappls script loaded. Initializing Map...");
         
-        // If yes, load the map!
+        // Initialize the Map
         const map = new window.mappls.Map('map', {
           center: [28.6129, 77.2295],
           zoom: 18,
         });
 
+        // Add RealView (Street View) once map loads
         map.addListener('load', () => {
+          console.log("Map fully loaded.");
           if (window.mappls.RealView) {
             realViewRef.current = new window.mappls.RealView({
               map: map,
@@ -37,157 +36,41 @@ useEffect(() => {
             });
           }
         });
-      
+
       } else {
-        // If script is not ready, wait 100ms and try again
-        setTimeout(initMap, 100); 
+        console.log("Waiting for script...");
+        setTimeout(initMap, 100); // Try again in 100ms
       }
     };
 
-    // 3. Start the check
+    // 3. Start checking
     initMap();
 
-    // Cleanup function
+    // Cleanup
     return () => {
-      document.body.removeChild(script); // Remove script when leaving page
+      const existingScript = document.getElementById("mappls-script");
+      if (existingScript) {
+        document.body.removeChild(existingScript);
+      }
       if (realViewRef.current) {
         realViewRef.current.remove();
       }
     };
   }, []);
 
-  // 2. Initialize Map
-  const initMap = () => {
-    // Safety check
-    if (mapRef.current) return;
-
-const map = new window.mappls.Map('map', {  // <-- Fix: Small 'm'
-      center: [28.6129, 77.2295], // India Gate
-      zoom: 18,
-      tilt: 65,      // Max tilt for 3D drama
-      heading: 0,
-      clickableIcons: false,
-    });
-
-    map.addListener('load', function() {
-        console.log("Map Loaded");
-        setIsMapLoaded(true);
-
-        // A. Enable Textured 3D Landmarks (Red Fort, Taj, etc.)
-        if (window.mappls.add3DModel) {
-             window.mappls.add3DModel({ map: map });
-        }
-        
-        // B. Switch to Hybrid (Satellite) for realism
-        // Note: Some Mappls versions use setTraffic, others just rely on the base tile.
-        // If the map looks generic, we can force a layer change here if needed.
-        map.setTraffic(false);
-    });
-
-    mapRef.current = map;
-  };
-
-  // 3. Expose Functions to Parent (App.jsx)
-  useImperativeHandle(ref, () => ({
-    flyTo: (lat, lng) => {
-        if (!mapRef.current) return;
-        
-        // Stop RealView if flying to new place
-        if (isRealViewActive) toggleRealView(false);
-
-        // Mappls uses panTo + Zoom for smooth flight
-        mapRef.current.panTo({ lat, lng });
-        
-        setTimeout(() => {
-            mapRef.current.setZoom(19);
-            mapRef.current.setTilt(65);
-        }, 1500); // Wait for pan to finish
-    },
-    
-    startOrbit: () => {
-        if (!mapRef.current || orbitRef.current) return;
-
-        let heading = mapRef.current.getHeading() || 0;
-        const animate = () => {
-            // Stop spinning if user enters Street View
-            if (isRealViewActive) return;
-
-            heading = (heading + 0.15) % 360; // 0.15 speed
-            mapRef.current.setHeading(heading);
-            orbitRef.current = requestAnimationFrame(animate);
-        };
-        animate();
-    },
-
-    enterRealView: (lat, lng) => {
-        toggleRealView(true, lat, lng);
-    }
-  }));
-
-  // 4. Toggle Logic for Street View
-  const toggleRealView = (shouldActive, lat, lng) => {
-      setIsRealViewActive(shouldActive);
-
-      if (shouldActive) {
-          // Initialize or Move RealView
-          if (!realViewRef.current) {
-              if(!window.Mappls.RealView) {
-                  alert("RealView Plugin not loaded yet. Wait a sec and try again.");
-                  return;
-              }
-              
-realViewRef.current = new window.mappls.RealView({ // <-- Fix
-                  mapId: 'realview-container',
-                  position: { lat, lng },
-                  unit: 'metric'
-              });
-          } else {
-              // Just move the existing viewer
-              realViewRef.current.setPosition({ lat, lng });
-          }
-      } else {
-          // Switching back to Map -> Do nothing special, CSS hides the div
-      }
-  };
-
+  // 4. THE CRITICAL PART: Return a div with Explicit Height
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-        {/* The 3D Map */}
-        <div id="map" style={{ width: '100%', height: '100%' }}></div>
-
-        {/* The Street View Overlay (Top Z-Index) */}
-        <div id="realview-container" style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            zIndex: 99999, // Super high to cover the map
-            display: isRealViewActive ? 'block' : 'none',
-            backgroundColor: 'black'
-        }}>
-            {/* Close Button for RealView */}
-            <button 
-                onClick={() => setIsRealViewActive(false)}
-                style={{
-                    position: 'absolute',
-                    top: '20px',
-                    left: '20px',
-                    zIndex: 100000,
-                    padding: '10px 20px',
-                    background: 'red',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
-                }}
-            >
-                EXIT STREET VIEW
-            </button>
-        </div>
+    <div 
+      id="map" 
+      style={{ 
+        width: '100%', 
+        height: '100vh', // Forces the map to take full screen height
+        backgroundColor: '#f0f0f0' // Light gray background to confirm div is there
+      }} 
+    >
+      <p style={{ textAlign: 'center', paddingTop: '20px' }}>Loading Map...</p>
     </div>
   );
-});
- 
-export default MapplsMap; 
+};
+
+export default MapplsMap;
