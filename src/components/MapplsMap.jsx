@@ -10,7 +10,15 @@ const MapplsMap = forwardRef((props, ref) => {
 
   // 1. Script Loader with RealView Plugin
 useEffect(() => {
-    // 1. Define the initialization function
+    // 1. Create the script tag dynamically
+    const script = document.createElement("script");
+    // NOTE: We removed the '&callback=initMapWithRealView' part to prevent the crash!
+    script.src = `https://apis.mappls.com/advancedmaps/api/${import.meta.env.VITE_MAPPLS_KEY}/map_sdk?layer=vector&v=3.0&plugins=realview`;
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+
+    // 2. Define the initialization function (The Safety Loop)
     const initMap = () => {
       // CHECK: Is the Mappls script loaded yet?
       if (window.mappls && window.mappls.Map) {
@@ -22,7 +30,6 @@ useEffect(() => {
         });
 
         map.addListener('load', () => {
-          // Initialize RealView (Street View) only after map loads
           if (window.mappls.RealView) {
             realViewRef.current = new window.mappls.RealView({
               map: map,
@@ -33,16 +40,16 @@ useEffect(() => {
       
       } else {
         // If script is not ready, wait 100ms and try again
-        console.log("Waiting for Mappls script...");
         setTimeout(initMap, 100); 
       }
     };
 
-    // 2. Start the check
+    // 3. Start the check
     initMap();
 
     // Cleanup function
     return () => {
+      document.body.removeChild(script); // Remove script when leaving page
       if (realViewRef.current) {
         realViewRef.current.remove();
       }
