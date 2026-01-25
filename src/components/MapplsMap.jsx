@@ -1,74 +1,140 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import '../App.css'; // Ensure styling is applied
 
 const MapplsMap = () => {
+  const mapRef = useRef(null);
   const realViewRef = useRef(null);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
 
+  // --- 1. THE MONUMENTS DATA ---
+  const monuments = [
+    { 
+      name: "India Gate", 
+      coords: [28.6129, 77.2295], 
+      desc: "Welcome to India Gate, a war memorial located astride the Rajpath." 
+    },
+    { 
+      name: "Red Fort", 
+      coords: [28.6562, 77.2410], 
+      desc: "This is the Red Fort, a historic fort in the city of Delhi." 
+    },
+    { 
+      name: "Taj Mahal", 
+      coords: [27.1751, 78.0421], 
+      desc: "The Taj Mahal, an immense mausoleum of white marble in Agra." 
+    },
+    { 
+      name: "Lotus Temple", 
+      coords: [28.5535, 77.2588], 
+      desc: "The Lotus Temple, notable for its flowerlike shape." 
+    }
+  ];
+
+  // --- 2. AI NARRATION FUNCTION ---
+  const speak = (text) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); // Stop previous speech
+      const utterance = new SpeechSynthesisUtterance(text);
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // --- 3. LOAD MAP SAFELY ---
   useEffect(() => {
-    // Debug: Check if Key is present
-    console.log("Map Component Mounted. Key:", import.meta.env.VITE_MAPPLS_KEY);
-
-    // 1. Load the Script Dynamically
     const script = document.createElement("script");
     script.src = `https://apis.mappls.com/advancedmaps/api/${import.meta.env.VITE_MAPPLS_KEY}/map_sdk?layer=vector&v=3.0&plugins=realview`;
     script.async = true;
     script.defer = true;
-    script.id = "mappls-script"; // Tag it so we don't duplicate
+    script.id = "mappls-script";
     document.body.appendChild(script);
 
-    // 2. The Safety Loop (Waits for script to load)
     const initMap = () => {
       if (window.mappls && window.mappls.Map) {
-        console.log("Mappls script loaded. Initializing Map...");
-        
-        // Initialize the Map
-        const map = new window.mappls.Map('map', {
+        // Initialize Map
+        mapRef.current = new window.mappls.Map('map', {
           center: [28.6129, 77.2295],
           zoom: 18,
         });
 
-        // Add RealView (Street View) once map loads
-        map.addListener('load', () => {
-          console.log("Map fully loaded.");
+        // Initialize RealView (Street Mode) once map loads
+        mapRef.current.addListener('load', () => {
+          setIsMapLoaded(true);
           if (window.mappls.RealView) {
             realViewRef.current = new window.mappls.RealView({
-              map: map,
-              position: map.getCenter(),
+              map: mapRef.current,
+              position: mapRef.current.getCenter(),
             });
           }
         });
 
       } else {
-        console.log("Waiting for script...");
-        setTimeout(initMap, 100); // Try again in 100ms
+        setTimeout(initMap, 100);
       }
     };
 
-    // 3. Start checking
     initMap();
 
-    // Cleanup
     return () => {
       const existingScript = document.getElementById("mappls-script");
-      if (existingScript) {
-        document.body.removeChild(existingScript);
-      }
-      if (realViewRef.current) {
-        realViewRef.current.remove();
-      }
+      if (existingScript) document.body.removeChild(existingScript);
+      if (realViewRef.current) realViewRef.current.remove();
     };
   }, []);
 
-  // 4. THE CRITICAL PART: Return a div with Explicit Height
+  // --- 4. FLY TO LOCATION FUNCTION ---
+  const flyToLocation = (monument) => {
+    if (mapRef.current && isMapLoaded) {
+      // Move the Map
+      mapRef.current.panTo({ lat: monument.coords[0], lng: monument.coords[1] });
+      mapRef.current.setZoom(19);
+
+      // Move the Street View (if active)
+      if (realViewRef.current) {
+        realViewRef.current.setPosition({ lat: monument.coords[0], lng: monument.coords[1] });
+      }
+
+      // Speak
+      speak(monument.desc);
+    }
+  };
+
+  // --- 5. THE UI (SIDEBAR + MAP) ---
   return (
-    <div 
-      id="map" 
-      style={{ 
-        width: '100%', 
-        height: '100vh', // Forces the map to take full screen height
-        backgroundColor: '#f0f0f0' // Light gray background to confirm div is there
-      }} 
-    >
-      <p style={{ textAlign: 'center', paddingTop: '20px' }}>Loading Map...</p>
+    <div style={{ display: 'flex', width: '100%', height: '100vh' }}>
+      
+      {/* SIDEBAR */}
+      <div style={{
+        width: '250px',
+        background: '#2c3e50',
+        color: 'white',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        zIndex: 1000 // Ensure it sits on top
+      }}>
+        <h2>Drone Tour</h2>
+        {monuments.map((m, index) => (
+          <button 
+            key={index} 
+            onClick={() => flyToLocation(m)}
+            style={{
+              padding: '10px',
+              cursor: 'pointer',
+              background: '#34495e',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              textAlign: 'left'
+            }}
+          >
+            ✈️ {m.name}
+          </button>
+        ))}
+      </div>
+
+      {/* MAP CONTAINER */}
+      <div id="map" style={{ flex: 1, height: '100%' }}></div>
     </div>
   );
 };
