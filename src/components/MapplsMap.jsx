@@ -3,20 +3,22 @@ import React, { useEffect, useRef, useState } from "react";
 const MapplsMap = () => {
   const mapRef = useRef(null);
   const markersRef = useRef([]);
+  const userMarkerRef = useRef(null);
   const orbitIntervalRef = useRef(null);
 
   const [activeMonument, setActiveMonument] = useState(null);
   const [status, setStatus] = useState("Initializing...");
   const [showVideo, setShowVideo] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
 
-  // coords are [lng, lat]
+  /* ------------------ MONUMENT DATA ------------------ */
   const monuments = [
     {
       name: "India Gate",
-      coords: [77.2295, 28.6129],
+      coords: [77.2295, 28.6129], // [lng, lat]
       desc:
-        "India Gate is one of Delhi’s most iconic landmarks and a powerful symbol of sacrifice and remembrance. Built in 1931, the monument was designed by British architect Sir Edwin Lutyens to honor over 84,000 Indian soldiers who lost their lives during World War I and the Third Anglo-Afghan War. Standing 42 meters tall, its design is inspired by ancient Roman triumphal arches, representing victory and honor. Beneath India Gate burns the Amar Jawan Jyoti, an eternal flame dedicated to the unknown soldiers who gave their lives for the nation.",
+        "India Gate is one of Delhi’s most iconic landmarks and a symbol of sacrifice. Built in 1931, it commemorates Indian soldiers who lost their lives in World War One. Beneath it burns the Amar Jawan Jyoti.",
       video: "/videos/india_gate.mp4"
     },
     {
@@ -41,14 +43,41 @@ const MapplsMap = () => {
     }
   ];
 
-  /* ------------------ AUDIO ------------------ */
+  /* ------------------ NATURAL VOICE ------------------ */
   const speak = (text) => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.95;
-      window.speechSynthesis.speak(u);
-    }
+    if (!("speechSynthesis" in window)) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice =
+      voices.find(v => v.name.includes("Google") && v.lang === "en-IN") ||
+      voices.find(v => v.name.includes("Microsoft") && v.lang.includes("en-IN")) ||
+      voices.find(v => v.name.includes("Google") && v.lang.startsWith("en")) ||
+      voices[0];
+
+    if (preferredVoice) utterance.voice = preferredVoice;
+
+    utterance.rate = 0.9;
+    utterance.pitch = 1.05;
+    utterance.volume = 1;
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  /* ------------------ DISTANCE (HAVERSINE) ------------------ */
+  const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) ** 2;
+
+    return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2);
   };
 
   /* ------------------ ORBIT ------------------ */
@@ -62,7 +91,6 @@ const MapplsMap = () => {
   const startOrbit = () => {
     if (!mapRef.current) return;
     stopOrbit();
-
     let bearing = mapRef.current.getBearing() || 0;
     orbitIntervalRef.current = setInterval(() => {
       bearing += 2;
@@ -70,10 +98,9 @@ const MapplsMap = () => {
     }, 200);
   };
 
-  /* ------------------ DRONE FLY-IN ------------------ */
+  /* ------------------ DRONE FLY ------------------ */
   const flyToLocation = (monument) => {
     if (!mapRef.current) return;
-
     stopOrbit();
     setShowVideo(false);
     setIsCollapsed(false);
@@ -86,13 +113,30 @@ const MapplsMap = () => {
       pitch: 75,
       bearing: 20,
       speed: 0.8,
-      curve: 1.6,
-      easing: (t) => t
+      curve: 1.6
     });
   };
 
   /* ------------------ MAP INIT ------------------ */
   useEffect(() => {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
+
+    // Get user location
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          });
+        },
+        () => console.warn("Location permission denied"),
+        { enableHighAccuracy: true }
+      );
+    }
+
     setStatus("Loading Map Script...");
 
     const script = document.createElement("script");
@@ -113,22 +157,30 @@ const MapplsMap = () => {
       mapRef.current = new window.mappls.Map("map", {
         center: [77.2295, 28.6129],
         zoom: 12,
-        pitch: 45,
-        interactive: true
+        pitch: 45
       });
 
       mapRef.current.addListener("load", () => {
         setStatus("Map Ready");
 
-        monuments.forEach((m) => {
+        monuments.forEach(m => {
           const marker = new window.mappls.Marker({
             map: mapRef.current,
             position: { lng: m.coords[0], lat: m.coords[1] }
           });
-
           marker.addListener("click", () => flyToLocation(m));
           markersRef.current.push(marker);
         });
+
+        if (userLocation) {
+          userMarkerRef.current = new window.mappls.Marker({
+            map: mapRef.current,
+            position: userLocation,
+            icon: {
+              url: "https://maps.gstatic.com/mapfiles/ms2/micons/blue-dot.png"
+            }
+          });
+        }
       });
     };
 
@@ -136,7 +188,7 @@ const MapplsMap = () => {
 
     return () => {
       stopOrbit();
-      markersRef.current.forEach((m) => m.remove());
+      markersRef.current.forEach(m => m.remove());
       const s = document.getElementById("mappls-script");
       if (s) document.body.removeChild(s);
     };
@@ -145,17 +197,12 @@ const MapplsMap = () => {
   /* ------------------ UI ------------------ */
   return (
     <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
-      {/* MAP */}
       <div id="map" style={{ width: "100%", height: "100%" }} />
 
-      {/* STATUS */}
       <div style={statusStyle}>{status}</div>
 
-      {/* SIDEBAR */}
       <div style={sidebarStyle}>
-        <h3 style={{ color: "#00d2ff", marginBottom: 10 }}>
-          🇮🇳 Delhi Drone Tour
-        </h3>
+        <h3 style={{ color: "#00d2ff" }}>🇮🇳 Delhi Drone Tour</h3>
         {monuments.map((m, i) => (
           <button
             key={i}
@@ -167,10 +214,8 @@ const MapplsMap = () => {
         ))}
       </div>
 
-      {/* INFO CARD */}
       {activeMonument && (
         <div style={infoCardStyle}>
-          {/* HEADER */}
           <div style={headerStyle}>
             <h2 style={{ margin: 0, color: "#00d2ff" }}>
               {activeMonument.name}
@@ -183,13 +228,26 @@ const MapplsMap = () => {
             </button>
           </div>
 
-          {/* DESCRIPTION */}
           {!isCollapsed && (
-            <p style={descStyle}>{activeMonument.desc}</p>
+            <>
+              <p style={descStyle}>{activeMonument.desc}</p>
+
+              {userLocation && (
+                <p style={{ color: "#00ffcc" }}>
+                  📏 Distance:{" "}
+                  {getDistanceKm(
+                    userLocation.lat,
+                    userLocation.lng,
+                    activeMonument.coords[1],
+                    activeMonument.coords[0]
+                  )}{" "}
+                  km
+                </p>
+              )}
+            </>
           )}
 
-          {/* ACTIONS */}
-          <div style={{ display: "flex", gap: 10, marginTop: 15 }}>
+          <div style={{ display: "flex", gap: 10, marginTop: 15, flexWrap: "wrap" }}>
             <button onClick={() => speak(activeMonument.desc)} style={btnStyle("#222")}>
               🔊 Audio
             </button>
@@ -207,11 +265,21 @@ const MapplsMap = () => {
             <button onClick={stopOrbit} style={btnStyle("#444")}>
               ⏹ Stop
             </button>
+
+            <button
+              onClick={() => {
+                if (!userLocation) return alert("Location not available");
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${activeMonument.coords[1]},${activeMonument.coords[0]}&travelmode=driving`;
+window.open(url, "_blank");
+              }}
+              style={btnStyle("#006400")}
+            >
+              🧭 Navigate
+            </button>
           </div>
         </div>
       )}
 
-      {/* VIDEO OVERLAY */}
       {showVideo && activeMonument?.video && (
         <div style={videoOverlay} onClick={() => setShowVideo(false)}>
           <video
@@ -270,11 +338,10 @@ const infoCardStyle = {
   right: 40,
   width: 360,
   background: "rgba(0,0,0,0.95)",
-  color: "white",
-  borderRadius: 16,
   padding: 24,
-  zIndex: 20,
-  borderLeft: "5px solid #00d2ff"
+  borderRadius: 16,
+  borderLeft: "5px solid #00d2ff",
+  zIndex: 20
 };
 
 const headerStyle = {
@@ -294,9 +361,7 @@ const collapseBtn = {
 const descStyle = {
   color: "#ccc",
   lineHeight: 1.6,
-  marginTop: 12,
-  maxHeight: 200,
-  overflowY: "auto"
+  marginTop: 12
 };
 
 const btnStyle = (bg) => ({
