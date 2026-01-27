@@ -8,17 +8,17 @@ const MapplsMap = () => {
   const [activeMonument, setActiveMonument] = useState(null);
   const [status, setStatus] = useState("Initializing...");
   const [showVideo, setShowVideo] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // IMPORTANT: coords are [lng, lat]
+  // coords are [lng, lat]
   const monuments = [
-  {
-    name: "India Gate",
-    coords: [77.2295, 28.6129],
-    desc: "India Gate is one of Delhi’s most iconic landmarks and a powerful symbol of sacrifice and remembrance. Built in 1931, the monument was designed by British architect Sir Edwin Lutyens to honor over 84,000 Indian soldiers who lost their lives during World War I and the Third Anglo-Afghan War. Standing 42 meters tall, its design is inspired by ancient Roman triumphal arches, representing victory and honor. Beneath India Gate burns the Amar Jawan Jyoti, an eternal flame dedicated to the unknown soldiers who gave their lives for the nation. Today, India Gate is not just a historic memorial, but a place where history, patriotism, and everyday life come together.",
-    video: "/videos/india_gate.mp4"
-  },
-
-
+    {
+      name: "India Gate",
+      coords: [77.2295, 28.6129],
+      desc:
+        "India Gate is one of Delhi’s most iconic landmarks and a powerful symbol of sacrifice and remembrance. Built in 1931, the monument was designed by British architect Sir Edwin Lutyens to honor over 84,000 Indian soldiers who lost their lives during World War I and the Third Anglo-Afghan War. Standing 42 meters tall, its design is inspired by ancient Roman triumphal arches, representing victory and honor. Beneath India Gate burns the Amar Jawan Jyoti, an eternal flame dedicated to the unknown soldiers who gave their lives for the nation.",
+      video: "/videos/india_gate.mp4"
+    },
     {
       name: "Red Fort",
       coords: [77.2410, 28.6562],
@@ -64,7 +64,6 @@ const MapplsMap = () => {
     stopOrbit();
 
     let bearing = mapRef.current.getBearing() || 0;
-
     orbitIntervalRef.current = setInterval(() => {
       bearing += 2;
       mapRef.current.rotateTo(bearing, { duration: 200 });
@@ -77,6 +76,7 @@ const MapplsMap = () => {
 
     stopOrbit();
     setShowVideo(false);
+    setIsCollapsed(false);
     setActiveMonument(monument);
     speak(monument.desc);
 
@@ -146,62 +146,21 @@ const MapplsMap = () => {
   return (
     <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
       {/* MAP */}
-      <div
-        id="map"
-        style={{ width: "100%", height: "100%", position: "absolute" }}
-      />
+      <div id="map" style={{ width: "100%", height: "100%" }} />
 
       {/* STATUS */}
-      <div
-        style={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          background: "black",
-          color: "#00ffcc",
-          padding: "6px 12px",
-          borderRadius: 6,
-          fontSize: 12,
-          zIndex: 999
-        }}
-      >
-        {status}
-      </div>
+      <div style={statusStyle}>{status}</div>
 
       {/* SIDEBAR */}
-      <div
-        style={{
-          position: "absolute",
-          top: 20,
-          left: 20,
-          width: 260,
-          background: "rgba(10,10,10,0.95)",
-          color: "white",
-          borderRadius: 12,
-          padding: 15,
-          zIndex: 10
-        }}
-      >
-        <h3 style={{ marginBottom: 10, color: "#00d2ff" }}>
+      <div style={sidebarStyle}>
+        <h3 style={{ color: "#00d2ff", marginBottom: 10 }}>
           🇮🇳 Delhi Drone Tour
         </h3>
-
         {monuments.map((m, i) => (
           <button
             key={i}
             onClick={() => flyToLocation(m)}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 8,
-              background:
-                activeMonument?.name === m.name ? "#0077b6" : "#222",
-              color: "white",
-              border: "none",
-              borderRadius: 8,
-              cursor: "pointer",
-              textAlign: "left"
-            }}
+            style={sidebarBtn(activeMonument?.name === m.name)}
           >
             📍 {m.name}
           </button>
@@ -210,33 +169,28 @@ const MapplsMap = () => {
 
       {/* INFO CARD */}
       {activeMonument && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: 40,
-            right: 40,
-            width: 360,
-            background: "rgba(0,0,0,0.95)",
-            color: "white",
-            borderRadius: 16,
-            padding: 24,
-            zIndex: 20,
-            borderLeft: "5px solid #00d2ff"
-          }}
-        >
-          <h2 style={{ marginBottom: 10, color: "#00d2ff" }}>
-            {activeMonument.name}
-          </h2>
-
-          <p style={{ color: "#ccc", lineHeight: 1.6 }}>
-            {activeMonument.desc}
-          </p>
-
-          <div style={{ display: "flex", gap: 10, marginTop: 15 }}>
+        <div style={infoCardStyle}>
+          {/* HEADER */}
+          <div style={headerStyle}>
+            <h2 style={{ margin: 0, color: "#00d2ff" }}>
+              {activeMonument.name}
+            </h2>
             <button
-              onClick={() => speak(activeMonument.desc)}
-              style={btnStyle("#222")}
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              style={collapseBtn}
             >
+              {isCollapsed ? "➕" : "➖"}
+            </button>
+          </div>
+
+          {/* DESCRIPTION */}
+          {!isCollapsed && (
+            <p style={descStyle}>{activeMonument.desc}</p>
+          )}
+
+          {/* ACTIONS */}
+          <div style={{ display: "flex", gap: 10, marginTop: 15 }}>
+            <button onClick={() => speak(activeMonument.desc)} style={btnStyle("#222")}>
               🔊 Audio
             </button>
 
@@ -259,30 +213,14 @@ const MapplsMap = () => {
 
       {/* VIDEO OVERLAY */}
       {showVideo && activeMonument?.video && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-          onClick={() => setShowVideo(false)}
-        >
+        <div style={videoOverlay} onClick={() => setShowVideo(false)}>
           <video
             src={activeMonument.video}
             autoPlay
             muted
             playsInline
             onEnded={() => setShowVideo(false)}
-            style={{
-              width: "80%",
-              maxWidth: "900px",
-              borderRadius: "16px",
-              boxShadow: "0 30px 80px rgba(0,0,0,0.7)"
-            }}
+            style={videoStyle}
           />
         </div>
       )}
@@ -290,15 +228,102 @@ const MapplsMap = () => {
   );
 };
 
-/* ------------------ BUTTON STYLE ------------------ */
+/* ------------------ STYLES ------------------ */
+const statusStyle = {
+  position: "absolute",
+  top: 10,
+  right: 10,
+  background: "black",
+  color: "#00ffcc",
+  padding: "6px 12px",
+  borderRadius: 6,
+  fontSize: 12,
+  zIndex: 999
+};
+
+const sidebarStyle = {
+  position: "absolute",
+  top: 20,
+  left: 20,
+  width: 260,
+  background: "rgba(10,10,10,0.95)",
+  padding: 15,
+  borderRadius: 12,
+  zIndex: 10
+};
+
+const sidebarBtn = (active) => ({
+  width: "100%",
+  padding: 12,
+  marginBottom: 8,
+  background: active ? "#0077b6" : "#222",
+  color: "white",
+  border: "none",
+  borderRadius: 8,
+  cursor: "pointer",
+  textAlign: "left"
+});
+
+const infoCardStyle = {
+  position: "absolute",
+  bottom: 40,
+  right: 40,
+  width: 360,
+  background: "rgba(0,0,0,0.95)",
+  color: "white",
+  borderRadius: 16,
+  padding: 24,
+  zIndex: 20,
+  borderLeft: "5px solid #00d2ff"
+};
+
+const headerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center"
+};
+
+const collapseBtn = {
+  background: "none",
+  border: "none",
+  color: "#00d2ff",
+  fontSize: 18,
+  cursor: "pointer"
+};
+
+const descStyle = {
+  color: "#ccc",
+  lineHeight: 1.6,
+  marginTop: 12,
+  maxHeight: 200,
+  overflowY: "auto"
+};
+
 const btnStyle = (bg) => ({
   flex: 1,
-  padding: "10px",
+  padding: 10,
   background: bg,
   color: "white",
   border: "1px solid #555",
-  borderRadius: "8px",
+  borderRadius: 8,
   cursor: "pointer"
 });
+
+const videoOverlay = {
+  position: "absolute",
+  inset: 0,
+  background: "rgba(0,0,0,0.85)",
+  zIndex: 99999,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center"
+};
+
+const videoStyle = {
+  width: "80%",
+  maxWidth: "900px",
+  borderRadius: 16,
+  boxShadow: "0 30px 80px rgba(0,0,0,0.7)"
+};
 
 export default MapplsMap;
