@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import TripPlanner from "./TripPlanner";
 
 const MapplsMap = () => {
   const mapRef = useRef(null);
@@ -97,6 +98,21 @@ const MapplsMap = () => {
       mapRef.current.rotateTo(bearing, { duration: 200 });
     }, 200);
   };
+
+  const generateTripPlan = (days, budget, city) => {
+  console.log("Trip Requested:", days, budget, city);
+
+  // TEMP: Hackathon-friendly logic
+  alert(
+    `AI is generating a ${days}-day trip for ${city} under ₹${budget}`
+  );
+
+  // Later this will:
+  // 1. Create day-wise routes
+  // 2. Drop hotel pins
+  // 3. Enable booking buttons
+};
+
 
   /* ------------------ DRONE FLY ------------------ */
   const flyToLocation = (monument) => {
@@ -202,17 +218,26 @@ const MapplsMap = () => {
       <div style={statusStyle}>{status}</div>
 
       <div style={sidebarStyle}>
-        <h3 style={{ color: "#00d2ff" }}>🇮🇳 Delhi Drone Tour</h3>
-        {monuments.map((m, i) => (
-          <button
-            key={i}
-            onClick={() => flyToLocation(m)}
-            style={sidebarBtn(activeMonument?.name === m.name)}
-          >
-            📍 {m.name}
-          </button>
-        ))}
-      </div>
+  <h3 style={{ color: "#00d2ff" }}>🇮🇳 GeoYatra</h3>
+
+  {/* Monument Buttons */}
+  {monuments.map((m, i) => (
+    <button
+      key={i}
+      onClick={() => flyToLocation(m)}
+      style={sidebarBtn(activeMonument?.name === m.name)}
+    >
+      📍 {m.name}
+    </button>
+  ))}
+
+  {/* Divider */}
+  <hr style={{ margin: "15px 0", borderColor: "#333" }} />
+
+  {/* Trip Planner Component */}
+  <TripPlanner onGenerate={generateTripPlan} />
+</div>
+
 
       {activeMonument && (
         <div style={infoCardStyle}>
