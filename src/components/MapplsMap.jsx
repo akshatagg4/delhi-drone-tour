@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import TripPlanner from "./TripPlanner";
 
+
 const MapplsMap = () => {
   const mapRef = useRef(null);
   const markersRef = useRef([]);
@@ -12,6 +13,8 @@ const MapplsMap = () => {
   const [showVideo, setShowVideo] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
+  const [tripPlan, setTripPlan] = useState(null);
+
 
   /* ------------------ MONUMENT DATA ------------------ */
   const monuments = [
@@ -102,17 +105,34 @@ const MapplsMap = () => {
   const generateTripPlan = (days, budget, city) => {
   console.log("Trip Requested:", days, budget, city);
 
-  // TEMP: Hackathon-friendly logic
-  alert(
-    `AI is generating a ${days}-day trip for ${city} under ₹${budget}`
-  );
+  const perDay = Math.ceil(monuments.length / days);
+  const plan = [];
 
-  // Later this will:
-  // 1. Create day-wise routes
-  // 2. Drop hotel pins
-  // 3. Enable booking buttons
+  for (let i = 0; i < days; i++) {
+    const dayMonuments = monuments.slice(
+      i * perDay,
+      (i + 1) * perDay
+    );
+
+    if (dayMonuments.length === 0) continue;
+
+    plan.push({
+      day: i + 1,
+      places: dayMonuments,
+      hotel: {
+        name: `Comfort Stay - Day ${i + 1}`,
+        price: Math.floor(budget / days),
+        coords: dayMonuments[0].coords,
+        bookingUrl: "https://www.skyscanner.co.in/hotels"
+      }
+    });
+  }
+
+  setTripPlan(plan);
+
+  // Focus map on first monument of Day 1
+  flyToLocation(plan[0].places[0]);
 };
-
 
   /* ------------------ DRONE FLY ------------------ */
   const flyToLocation = (monument) => {
@@ -240,70 +260,153 @@ const MapplsMap = () => {
 
 
       {activeMonument && (
-        <div style={infoCardStyle}>
-          <div style={headerStyle}>
-            <h2 style={{ margin: 0, color: "#00d2ff" }}>
-              {activeMonument.name}
-            </h2>
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              style={collapseBtn}
-            >
-              {isCollapsed ? "➕" : "➖"}
-            </button>
+  <div style={infoCardStyle}>
+    {/* Header */}
+    <div style={headerStyle}>
+      <h2 style={{ margin: 0, color: "#00d2ff" }}>
+        {activeMonument.name}
+      </h2>
+
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        style={collapseBtn}
+      >
+        {isCollapsed ? "➕" : "➖"}
+      </button>
+    </div>
+
+    {/* Content */}
+    {!isCollapsed && (
+      <>
+        <p style={descStyle}>{activeMonument.desc}</p>
+
+        {userLocation && (
+          <p style={{ color: "#00ffcc", marginTop: 8 }}>
+            📏 Distance:{" "}
+            {getDistanceKm(
+              userLocation.lat,
+              userLocation.lng,
+              activeMonument.coords[1],
+              activeMonument.coords[0]
+            )}{" "}
+            km
+          </p>
+        )}
+
+        {/* Trip Plan Section */}
+        {tripPlan && (
+          <div style={{ marginTop: 16 }}>
+            <h3 style={{ color: "#00ffcc", marginBottom: 8 }}>
+              📅 Your Trip Plan
+            </h3>
+
+            {tripPlan.map((day) => (
+              <div
+                key={day.day}
+                style={{
+                  marginTop: 10,
+                  padding: 12,
+                  background: "#111",
+                  borderRadius: 12,
+                  border: "1px solid #333"
+                }}
+              >
+                <b style={{ color: "#fff" }}>
+                  Day {day.day}
+                </b>
+
+                <ul
+                  style={{
+                    color: "#ccc",
+                    paddingLeft: 18,
+                    marginTop: 6
+                  }}
+                >
+                  {day.places.map((p) => (
+                    <li key={p.name}>{p.name}</li>
+                  ))}
+                </ul>
+
+                <div
+                  style={{
+                    marginTop: 6,
+                    color: "#00ffcc",
+                    fontSize: 14
+                  }}
+                >
+                  🏨 {day.hotel.name} — ₹{day.hotel.price}
+                </div>
+
+                <button
+                  onClick={() =>
+                    window.open(day.hotel.bookingUrl, "_blank")
+                  }
+                  style={{
+                    marginTop: 8,
+                    width: "100%",
+                    padding: 10,
+                    background: "#8a2be2",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: "pointer"
+                  }}
+                >
+                  Book Hotel
+                </button>
+              </div>
+            ))}
           </div>
+        )}
+      </>
+    )}
 
-          {!isCollapsed && (
-            <>
-              <p style={descStyle}>{activeMonument.desc}</p>
+    {/* Action Buttons */}
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        marginTop: 16,
+        flexWrap: "wrap"
+      }}
+    >
+      <button
+        onClick={() => speak(activeMonument.desc)}
+        style={btnStyle("#222")}
+      >
+        🔊 Audio
+      </button>
 
-              {userLocation && (
-                <p style={{ color: "#00ffcc" }}>
-                  📏 Distance:{" "}
-                  {getDistanceKm(
-                    userLocation.lat,
-                    userLocation.lng,
-                    activeMonument.coords[1],
-                    activeMonument.coords[0]
-                  )}{" "}
-                  km
-                </p>
-              )}
-            </>
-          )}
+      <button
+        onClick={() => {
+          startOrbit();
+          if (activeMonument.video) setShowVideo(true);
+        }}
+        style={btnStyle("#333")}
+      >
+        🌀 Orbit
+      </button>
 
-          <div style={{ display: "flex", gap: 10, marginTop: 15, flexWrap: "wrap" }}>
-            <button onClick={() => speak(activeMonument.desc)} style={btnStyle("#222")}>
-              🔊 Audio
-            </button>
+      <button onClick={stopOrbit} style={btnStyle("#444")}>
+        ⏹ Stop
+      </button>
 
-            <button
-              onClick={() => {
-                startOrbit();
-                if (activeMonument.video) setShowVideo(true);
-              }}
-              style={btnStyle("#333")}
-            >
-              🌀 Orbit
-            </button>
+      <button
+        onClick={() => {
+          if (!userLocation)
+            return alert("Location not available");
 
-            <button onClick={stopOrbit} style={btnStyle("#444")}>
-              ⏹ Stop
-            </button>
+          const url = `https://www.google.com/maps/dir/?api=1&destination=${activeMonument.coords[1]},${activeMonument.coords[0]}&travelmode=driving`;
+          window.open(url, "_blank");
+        }}
+        style={btnStyle("#006400")}
+      >
+        🧭 Navigate
+      </button>
+    </div>
+  </div>
+)}
 
-            <button
-              onClick={() => {
-                if (!userLocation) return alert("Location not available");
-                const url = `https://www.google.com/maps/dir/?api=1&destination=${activeMonument.coords[1]},${activeMonument.coords[0]}&travelmode=driving`;
-window.open(url, "_blank");
-              }}
-              style={btnStyle("#006400")}
-            >
-              🧭 Navigate
-            </button>
-          </div>
-        </div>
-      )}
 
       {showVideo && activeMonument?.video && (
         <div style={videoOverlay} onClick={() => setShowVideo(false)}>
