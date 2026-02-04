@@ -9,11 +9,19 @@ const MapplsMap = () => {
   const orbitIntervalRef = useRef(null);
 
   const [activeMonument, setActiveMonument] = useState(null);
+  const [selectedCity, setSelectedCity] = useState(null);
+  const [plannerStep, setPlannerStep] = useState("CITY"); 
+// CITY → PLAN → READY → TOURING
+ const [currentDay, setCurrentDay] = useState(null);
+ const [isTouring, setIsTouring] = useState(false);
+
+
   const [status, setStatus] = useState("Initializing...");
   const [showVideo, setShowVideo] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [tripPlan, setTripPlan] = useState(null);
+  
 
 
   /* ------------------ MONUMENT DATA ------------------ */
@@ -101,6 +109,8 @@ const MapplsMap = () => {
       mapRef.current.rotateTo(bearing, { duration: 200 });
     }, 200);
   };
+  const wait = (ms) => new Promise(res => setTimeout(res, ms));
+  /* ------------------ TRIP PLANNER ------------------ */
 
   const generateTripPlan = (days, budget, city) => {
   console.log("Trip Requested:", days, budget, city);
@@ -129,15 +139,45 @@ const MapplsMap = () => {
   }
 
   setTripPlan(plan);
+  setPlannerStep("READY");
+
 
   // Focus map on first monument of Day 1
   flyToLocation(plan[0].places[0]);
 };
 
+const startTour = async () => {
+  if (!tripPlan) return;
+
+  setPlannerStep("TOURING");
+  setIsTouring(true);
+
+  for (const day of tripPlan) {
+    setCurrentDay(day.day);
+    await wait(2500);
+
+    for (const place of day.places) {
+      await flyToLocation(place, true); // ✅ WAIT FOR MOVE
+      startOrbit();
+      await wait(5000);
+      stopOrbit();
+    }
+  }
+
+  setCurrentDay(null);
+  setIsTouring(false);
+  setPlannerStep("READY");
+};
+
+
+
   /* ------------------ DRONE FLY ------------------ */
-  const flyToLocation = (monument) => {
-    if (!mapRef.current) return;
-    stopOrbit();
+  const flyToLocation = (monument, fromTour = false) => {
+  return new Promise((resolve) => {
+    if (!mapRef.current) return resolve();
+
+    if (!fromTour) stopOrbit();
+
     setShowVideo(false);
     setIsCollapsed(false);
     setActiveMonument(monument);
@@ -151,7 +191,13 @@ const MapplsMap = () => {
       speed: 0.8,
       curve: 1.6
     });
-  };
+
+    // ✅ wait for camera movement
+    setTimeout(resolve, 2500);
+  });
+};
+
+
 
   /* ------------------ MAP INIT ------------------ */
   useEffect(() => {
@@ -191,10 +237,11 @@ const MapplsMap = () => {
       setStatus("Creating Map...");
 
       mapRef.current = new window.mappls.Map("map", {
-        center: [77.2295, 28.6129],
-        zoom: 12,
-        pitch: 45
-      });
+  center: [78.9629, 20.5937], // India
+  zoom: 4,
+  pitch: 0
+});
+
 
       mapRef.current.addListener("load", () => {
         setStatus("Map Ready");
@@ -234,29 +281,95 @@ const MapplsMap = () => {
   return (
     <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
       <div id="map" style={{ width: "100%", height: "100%" }} />
+      {plannerStep === "CITY" && (
+  <div style={cityOverlayStyle}>
+    <h2>Select a City</h2>
+
+    <button
+      onClick={() => {
+        setSelectedCity("Delhi");
+        setPlannerStep("PLAN");
+
+        mapRef.current.flyTo({
+          center: [77.2295, 28.6129],
+          zoom: 12,
+          speed: 0.8
+        });
+      }}
+    >
+      Delhi
+    </button>
+  </div>
+)}
+
 
       <div style={statusStyle}>{status}</div>
 
-      <div style={sidebarStyle}>
-  <h3 style={{ color: "#00d2ff" }}>🇮🇳 GeoYatra</h3>
+      {plannerStep !== "CITY" && (
+  <div style={sidebarStyle}>
+    {/* STEP: PLAN YOUR TRIP */}
+{plannerStep === "PLAN" && (
+  <>
+    <h3 style={{ color: "#00d2ff" }}>🧭 Plan Your Trip</h3>
+    <TripPlanner onGenerate={generateTripPlan} />
+  </>
+)}
 
-  {/* Monument Buttons */}
-  {monuments.map((m, i) => (
-    <button
-      key={i}
-      onClick={() => flyToLocation(m)}
-      style={sidebarBtn(activeMonument?.name === m.name)}
-    >
-      📍 {m.name}
-    </button>
-  ))}
+{/* STEP: READY / TOURING */}
+{(plannerStep === "READY" || plannerStep === "TOURING") && tripPlan && (
+  <>
+    <h3 style={{ color: "#00d2ff" }}>📍 Your Itinerary</h3>
 
-  {/* Divider */}
-  <hr style={{ margin: "15px 0", borderColor: "#333" }} />
+    {tripPlan.map(day => (
+      <div key={day.day}>
+        <h4 style={{ color: "#00ffcc" }}>Day {day.day}</h4>
 
-  {/* Trip Planner Component */}
-  <TripPlanner onGenerate={generateTripPlan} />
+        {day.places.map(p => (
+          <button
+            key={p.name}
+            disabled={plannerStep === "TOURING"}
+            onClick={() => flyToLocation(p)}
+            style={sidebarBtn(activeMonument?.name === p.name)}
+          >
+            📍 {p.name}
+          </button>
+        ))}
+      </div>
+    ))}
+
+    {plannerStep === "READY" && (
+      <button
+        onClick={startTour}
+        style={{
+          marginTop: 12,
+          width: "100%",
+          padding: 12,
+          background: "#00d2ff",
+          color: "black",
+          fontWeight: "bold",
+          borderRadius: 10
+        }}
+      >
+        🎥 Experience Tour
+      </button>
+    )}
+  </>
+)}
+
+    
+
+
+
+
 </div>
+)}
+
+{currentDay && (
+  <div style={dayBannerStyle}>
+    Day {currentDay}
+  </div>
+)}
+
 
 
       {activeMonument && (
@@ -293,71 +406,8 @@ const MapplsMap = () => {
           </p>
         )}
 
-        {/* Trip Plan Section */}
-        {tripPlan && (
-          <div style={{ marginTop: 16 }}>
-            <h3 style={{ color: "#00ffcc", marginBottom: 8 }}>
-              📅 Your Trip Plan
-            </h3>
-
-            {tripPlan.map((day) => (
-              <div
-                key={day.day}
-                style={{
-                  marginTop: 10,
-                  padding: 12,
-                  background: "#111",
-                  borderRadius: 12,
-                  border: "1px solid #333"
-                }}
-              >
-                <b style={{ color: "#fff" }}>
-                  Day {day.day}
-                </b>
-
-                <ul
-                  style={{
-                    color: "#ccc",
-                    paddingLeft: 18,
-                    marginTop: 6
-                  }}
-                >
-                  {day.places.map((p) => (
-                    <li key={p.name}>{p.name}</li>
-                  ))}
-                </ul>
-
-                <div
-                  style={{
-                    marginTop: 6,
-                    color: "#00ffcc",
-                    fontSize: 14
-                  }}
-                >
-                  🏨 {day.hotel.name} — ₹{day.hotel.price}
-                </div>
-
-                <button
-                  onClick={() =>
-                    window.open(day.hotel.bookingUrl, "_blank")
-                  }
-                  style={{
-                    marginTop: 8,
-                    width: "100%",
-                    padding: 10,
-                    background: "#8a2be2",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer"
-                  }}
-                >
-                  Book Hotel
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        
+          
       </>
     )}
 
@@ -518,5 +568,31 @@ const videoStyle = {
   borderRadius: 16,
   boxShadow: "0 30px 80px rgba(0,0,0,0.7)"
 };
+const cityOverlayStyle = {
+  position: "absolute",
+  inset: 0,
+  background: "rgba(0,0,0,0.9)",
+  zIndex: 9999,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "white"
+};
+
+const dayBannerStyle = {
+  position: "absolute",
+  top: 20,
+  left: "50%",
+  transform: "translateX(-50%)",
+  background: "#00d2ff",
+  color: "black",
+  padding: "12px 30px",
+  borderRadius: 20,
+  fontSize: 22,
+  fontWeight: "bold",
+  zIndex: 9999
+};
+
 
 export default MapplsMap;
